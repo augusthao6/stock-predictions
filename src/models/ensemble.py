@@ -33,7 +33,8 @@ class EnsembleModel:
     def __init__(self, weights: Optional[List[float]] = None):
         # weights = [lstm_w, xgb_w, rf_w, sentiment_w]
         self.weights = np.array(weights) if weights else None
-        self.meta_learner = LogisticRegression(C=1.0, max_iter=500, random_state=42)
+        self.meta_learner = LogisticRegression(C=1.0, max_iter=500, random_state=42,
+                                               class_weight='balanced')
         self._meta_trained = False
 
     # ------------------------------------------------------------------
