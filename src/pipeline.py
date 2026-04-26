@@ -1,5 +1,5 @@
 """
-Multi-stage ML pipeline for TradeSage.
+Multi-stage ML pipeline.
 
 Pipeline stages:
   Stage 1: Data collection (StockDataCollector + news fetch)
