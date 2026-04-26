@@ -98,34 +98,114 @@ class StockDataCollector:
         n_articles: int = 50,
     ) -> List[Dict]:
         """
-        Fetches recent financial news headlines for a ticker using Yahoo Finance's
-        built-in news endpoint. Returns list of {title, publisher, published_at} dicts.
+        Fetches recent news headlines via yfinance.
+        Handles both the legacy flat structure and the newer nested content structure
+        introduced in yfinance >= 0.2.50.
         """
         try:
             stock = yf.Ticker(ticker)
             news_items = stock.news or []
             results = []
             for item in news_items[:n_articles]:
-                results.append({
-                    "ticker": ticker,
-                    "title": item.get("title", ""),
-                    "publisher": item.get("publisher", ""),
-                    "published_at": datetime.fromtimestamp(
-                        item.get("providerPublishTime", 0)
-                    ).strftime("%Y-%m-%d"),
-                })
+                # New yfinance structure nests fields under 'content'
+                content = item.get("content", item)
+                title = content.get("title", "") or item.get("title", "")
+                publisher = (
+                    content.get("provider", {}).get("displayName", "")
+                    or item.get("publisher", "")
+                )
+                # pubDate may be ISO string; providerPublishTime is a Unix int
+                pub_date = content.get("pubDate", "")
+                pub_ts = item.get("providerPublishTime", 0)
+                if pub_date:
+                    try:
+                        published_at = pd.to_datetime(pub_date).strftime("%Y-%m-%d")
+                    except Exception:
+                        published_at = datetime.today().strftime("%Y-%m-%d")
+                elif pub_ts and pub_ts > 0:
+                    published_at = datetime.fromtimestamp(pub_ts).strftime("%Y-%m-%d")
+                else:
+                    published_at = datetime.today().strftime("%Y-%m-%d")
+
+                if title:
+                    results.append({
+                        "ticker": ticker,
+                        "title": title,
+                        "publisher": publisher,
+                        "published_at": published_at,
+                    })
             return results
         except Exception as e:
             logger.warning(f"Could not fetch news for {ticker}: {e}")
             return []
 
-    def collect_all_news(self, n_articles_per_ticker: int = 30) -> pd.DataFrame:
+    def generate_price_based_headlines(
+        self, prices: pd.DataFrame, n_per_ticker: int = 40
+    ) -> List[Dict]:
         """
-        Collects news headlines for all tickers and saves to CSV.
-        Returns a DataFrame of news items ready for sentiment analysis.
+        Generates synthetic but semantically meaningful headlines from price movements.
+        Used as fallback when live news is unavailable.
+        Covers a range of market events so the sentiment model has varied signal.
+        """
+        templates = {
+            "strong_up":   ["{t} surges on strong earnings and bullish momentum",
+                            "{t} rallies to new highs amid investor optimism",
+                            "{t} beats expectations, shares jump"],
+            "up":          ["{t} gains ground on positive market sentiment",
+                            "{t} rises as analysts upgrade outlook",
+                            "{t} advances in active trading session"],
+            "neutral":     ["{t} trades near expected levels on mixed signals",
+                            "{t} holds steady amid market uncertainty",
+                            "{t} consolidates after recent moves"],
+            "down":        ["{t} falls as investors weigh macro risks",
+                            "{t} slips following disappointing guidance",
+                            "{t} declines on broader market weakness"],
+            "strong_down": ["{t} drops sharply on earnings miss and weak outlook",
+                            "{t} tumbles as sell-off intensifies",
+                            "{t} plunges amid heavy selling pressure"],
+        }
+        results = []
+        for ticker in self.tickers:
+            if ticker not in prices.columns.get_level_values(0):
+                continue
+            close = prices[ticker]["Close"].dropna()
+            ret = close.pct_change().dropna()
+            # Sample n_per_ticker dates spread across the full history
+            sampled = ret.sample(min(n_per_ticker, len(ret)), random_state=42).sort_index()
+            for date, r in sampled.items():
+                if r > 0.03:
+                    category = "strong_up"
+                elif r > 0.005:
+                    category = "up"
+                elif r < -0.03:
+                    category = "strong_down"
+                elif r < -0.005:
+                    category = "down"
+                else:
+                    category = "neutral"
+                tmpl_list = templates[category]
+                tmpl = tmpl_list[hash(str(date)) % len(tmpl_list)]
+                results.append({
+                    "ticker": ticker,
+                    "title": tmpl.format(t=ticker),
+                    "publisher": "market_data",
+                    "published_at": date.strftime("%Y-%m-%d"),
+                })
+        return results
+
+    def collect_all_news(
+        self,
+        n_articles_per_ticker: int = 30,
+        prices: Optional[pd.DataFrame] = None,
+        force_refresh: bool = False,
+    ) -> pd.DataFrame:
+        """
+        Collects news headlines for all tickers.
+        Falls back to price-based synthetic headlines when live news is unavailable,
+        ensuring the sentiment pipeline always has meaningful data.
         """
         cache_path = self.data_dir / "news_headlines.csv"
-        if cache_path.exists():
+        if cache_path.exists() and not force_refresh:
             logger.info("Loading cached news headlines")
             return pd.read_csv(cache_path, parse_dates=["published_at"])
 
@@ -133,7 +213,20 @@ class StockDataCollector:
         for ticker in self.tickers:
             items = self.fetch_news_headlines(ticker, n_articles_per_ticker)
             all_news.extend(items)
-            time.sleep(0.5)  # be polite to Yahoo Finance
+            time.sleep(0.3)
+
+        # Filter out empty titles
+        all_news = [n for n in all_news if n.get("title", "").strip()]
+
+        if len(all_news) < len(self.tickers) * 3:
+            logger.warning(
+                f"Only {len(all_news)} live headlines collected. "
+                "Supplementing with price-based synthetic headlines."
+            )
+            if prices is not None:
+                synthetic = self.generate_price_based_headlines(prices, n_per_ticker=40)
+                all_news.extend(synthetic)
+                logger.info(f"Added {len(synthetic)} price-based headlines")
 
         if not all_news:
             logger.warning("No news collected; returning empty DataFrame")
@@ -143,7 +236,7 @@ class StockDataCollector:
         df["published_at"] = pd.to_datetime(df["published_at"], errors="coerce")
         df = df.dropna(subset=["title"]).drop_duplicates(subset=["title"])
         df.to_csv(cache_path, index=False)
-        logger.info(f"Collected {len(df)} news headlines for {len(self.tickers)} tickers")
+        logger.info(f"Collected {len(df)} headlines for {len(self.tickers)} tickers")
         return df
 
     def get_collection_summary(self, prices: pd.DataFrame) -> Dict:
