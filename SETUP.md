@@ -4,42 +4,85 @@
 
 - Python 3.10 or higher
 - pip
-- 4 GB RAM minimum (8 GB recommended for full dataset)
-- GPU optional (CPU-only training works fine, ~5-10 min per model)
+- 4 GB RAM minimum (8 GB recommended for full 10-ticker dataset)
+- GPU strongly recommended for training (CPU works but takes ~10 min per model)
 
-## Installation
+---
 
-### 1. Create a virtual environment (recommended)
+## Option A: Google Colab (free GPU!)
+Run all 4 notebooks in colab
+
+### Step 1 — Upload the project to Google Drive
+
+Clone or download the repository and place the `stock-predictions/` folder in the root of your Google Drive (`My Drive/stock-predictions/`).
+
+### Step 2 — Open a notebook in Colab
+
+Open any notebook from `notebooks/` in Google Colab. In each notebook, the first two cells handle setup automatically:
+
+```python
+from google.colab import drive
+drive.mount('/content/gdrive')
+
+%cd /content/gdrive/MyDrive/stock-predictions
+```
+
+### Step 3 — Set GPU runtime
+
+In Colab: **Runtime → Change runtime type → T4 GPU**
+
+### Step 4 — (Optional) Add Claude API key for live sentiment
+
+In Colab, go to the key icon (🔑) in the left sidebar → **Secrets** → add a secret named `ANTHROPIC_API_KEY` with your key value.
+
+Then in the notebook cell before creating the sentiment analyzer:
+
+```python
+import os
+from google.colab import userdata
+os.environ["ANTHROPIC_API_KEY"] = userdata.get("ANTHROPIC_API_KEY")
+```
+
+You can get a free API key at https://console.anthropic.com/
+
+Without a key, the system automatically falls back to a rule-based sentiment scorer.
+
+### Step 5 — Run notebooks in order
+
+1. `notebooks/1_data.ipynb` — Data collection, EDA, sentiment analysis (~5 min)
+2. `notebooks/2_modeltraining.ipynb` — LSTM + tree training, hyperparameter search (~10 min with GPU)
+3. `notebooks/3_ablationstudy.ipynb` — Ablation study (~8 min)
+4. `notebooks/4_evaluation.ipynb` — Backtesting, error analysis (~5 min)
+
+---
+
+## Option B: Local Installation
+
+### Step 1 — Create a virtual environment
 
 ```bash
 python -m venv venv
 
-# Activate on macOS/Linux:
+# macOS/Linux:
 source venv/bin/activate
 
-# Activate on Windows:
+# Windows:
 venv\Scripts\activate
 ```
 
-### 2. Install dependencies
+### Step 2 — Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Verify installation
+### Step 3 — Verify installation
 
 ```bash
-python -c "import torch; import yfinance; import anthropic; print('All packages installed successfully')"
+python -c "import torch; import yfinance; import anthropic; import xgboost; print('All packages installed successfully')"
 ```
 
-## API Keys
-
-### Claude API (Optional — for live sentiment analysis)
-
-TradeSage uses the Anthropic Claude API to analyze financial news sentiment. Without an API key, the system automatically falls back to a rule-based sentiment scorer, which still works correctly.
-
-To enable Claude API sentiment analysis:
+### Step 4 — (Optional) Set Claude API key
 
 ```bash
 # macOS/Linux
@@ -52,60 +95,31 @@ set ANTHROPIC_API_KEY=your_anthropic_api_key_here
 $env:ANTHROPIC_API_KEY="your_anthropic_api_key_here"
 ```
 
-You can get a free API key at https://console.anthropic.com/
-
-### Yahoo Finance (No API key required)
-
-Stock price data is downloaded via `yfinance`, which is free and requires no API key.
-
-## Running the Project
-
-### Option 1: Jupyter Notebooks (Recommended for grading)
+### Step 5 — Launch notebooks
 
 ```bash
 jupyter notebook notebooks/
 ```
 
-Run notebooks in order:
-1. `01_data_exploration.ipynb` — Data collection, preprocessing, EDA
-2. `02_model_training.ipynb` — Model training, hyperparameter search, training curves
-3. `03_ablation_study.ipynb` — Ablation study comparing design choices
-4. `04_evaluation.ipynb` — Full evaluation, backtesting, error analysis
+Run in order: `1_data.ipynb` → `2_modeltraining.ipynb` → `3_ablationstudy.ipynb` → `4_evaluation.ipynb`
 
-### Option 2: Python script (Full pipeline)
-
-```bash
-# From the TradeSage root directory:
-python -c "
-import sys, logging
-sys.path.insert(0, '.')
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
-from src.pipeline import TradeSagePipeline
-
-pipe = TradeSagePipeline(
-    tickers=['AAPL', 'MSFT', 'GOOGL'],
-    epochs=60,
-    hidden_size=128,
-    num_layers=2,
-    dropout=0.3,
-)
-results = pipe.run(ticker='AAPL', start='2015-01-01', end='2024-01-01')
-print(results['strategy_comparison'])
-"
-```
+---
 
 ## Data
 
-Stock price data is downloaded automatically on first run and cached in the `data/` directory as Parquet files. Re-downloads are only triggered when the cache is missing or `force_refresh=True`.
+Stock price data is downloaded automatically on first run via the Yahoo Finance API (`yfinance`) and cached in `data/prices_<start>_<end>.parquet`. News headlines are cached in `data/news_headlines.csv`. Re-downloads only happen when `force_refresh=True`.
 
-Expected download time: ~30 seconds for 5 tickers × 9 years.
+Expected download time: ~30 seconds for 10 tickers × 9 years of daily data.
+
+---
 
 ## Troubleshooting
 
-**`yfinance` rate limiting**: If download fails, wait 60 seconds and retry. The collector retries automatically.
-
-**`torch` not found**: Ensure you ran `pip install -r requirements.txt` in the correct virtual environment.
-
-**Notebook kernel not found**: Run `python -m ipykernel install --user --name=venv` after activating your virtual environment.
-
-**Claude API 401 error**: Check that `ANTHROPIC_API_KEY` is set correctly. The system will fall back to rule-based sentiment automatically.
+| Problem | Solution |
+|---------|----------|
+| `yfinance` rate limiting error | Wait 60 seconds; the collector retries automatically up to 3 times |
+| `torch` not found | Confirm you activated your virtual environment before `pip install` |
+| Notebook kernel not found | Run `python -m ipykernel install --user --name=venv` after activating venv |
+| Claude API 401 error | Check `ANTHROPIC_API_KEY` is set; system auto-falls back to rule-based scorer |
+| `ModuleNotFoundError: pyarrow` | Run `pip install pyarrow` — required for Parquet cache files |
+| Colab disconnects mid-training | Re-run from cell 5 in `2_modeltraining.ipynb` (data is cached, won't re-download) |
