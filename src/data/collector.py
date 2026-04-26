@@ -218,15 +218,12 @@ class StockDataCollector:
         # Filter out empty titles
         all_news = [n for n in all_news if n.get("title", "").strip()]
 
-        if len(all_news) < len(self.tickers) * 3:
-            logger.warning(
-                f"Only {len(all_news)} live headlines collected. "
-                "Supplementing with price-based synthetic headlines."
-            )
-            if prices is not None:
-                synthetic = self.generate_price_based_headlines(prices, n_per_ticker=40)
-                all_news.extend(synthetic)
-                logger.info(f"Added {len(synthetic)} price-based headlines")
+        # Always add price-based historical headlines so sentiment coverage spans
+        # the full 2017-2026 window, not just today's live news.
+        if prices is not None:
+            synthetic = self.generate_price_based_headlines(prices, n_per_ticker=40)
+            all_news.extend(synthetic)
+            logger.info(f"Added {len(synthetic)} price-based historical headlines")
 
         if not all_news:
             logger.warning("No news collected; returning empty DataFrame")

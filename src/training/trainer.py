@@ -85,7 +85,6 @@ class LSTMTrainer:
             factor=0.5,
             patience=5,
             min_lr=1e-6,
-            verbose=False,
         )
 
         # Early stopping (regularization technique #3)
@@ -142,16 +141,22 @@ class LSTMTrainer:
         val_loader: DataLoader,
         epochs: int = 100,
         verbose: bool = True,
+        print_every: int = 1,
     ) -> Dict[str, List[float]]:
         """
         Full training loop with early stopping and LR scheduling.
         Returns training history for curve visualization.
         """
-        logger.info(
-            f"Training on {self.device} | "
-            f"lr={self.optimizer.param_groups[0]['lr']}, "
-            f"wd={self.optimizer.param_groups[0]['weight_decay']}"
-        )
+        if verbose:
+            print(
+                f"Training on {self.device} | "
+                f"lr={self.optimizer.param_groups[0]['lr']:.2e}  "
+                f"wd={self.optimizer.param_groups[0]['weight_decay']:.2e}  "
+                f"max_epochs={epochs}"
+            )
+            print(f"{'Epoch':>6}  {'TrainLoss':>10}  {'ValLoss':>9}  "
+                  f"{'TrainAcc':>9}  {'ValAcc':>8}  {'LR':>9}  {'Time':>7}")
+            print("-" * 72)
 
         t0 = time.time()
         for epoch in range(1, epochs + 1):
@@ -167,19 +172,18 @@ class LSTMTrainer:
 
             self.scheduler.step(val_loss)
 
-            if verbose and epoch % 10 == 0:
+            if verbose and epoch % print_every == 0:
                 elapsed = time.time() - t0
-                logger.info(
-                    f"Epoch {epoch:3d}/{epochs} | "
-                    f"train_loss={tr_loss:.4f}, val_loss={val_loss:.4f} | "
-                    f"train_acc={tr_acc:.4f}, val_acc={val_acc:.4f} | "
-                    f"lr={current_lr:.2e} | {elapsed:.1f}s"
+                print(
+                    f"{epoch:>6d}  {tr_loss:>10.4f}  {val_loss:>9.4f}  "
+                    f"{tr_acc:>9.4f}  {val_acc:>8.4f}  {current_lr:>9.2e}  {elapsed:>6.1f}s"
                 )
 
             if self.early_stopping.step(val_loss, self.model):
-                logger.info(
-                    f"Early stopping triggered at epoch {epoch} "
-                    f"(best val_loss={self.early_stopping.best_loss:.4f})"
+                elapsed = time.time() - t0
+                print(
+                    f"\nEarly stopping at epoch {epoch} — "
+                    f"best val_loss={self.early_stopping.best_loss:.4f}  ({elapsed:.1f}s total)"
                 )
                 break
 
