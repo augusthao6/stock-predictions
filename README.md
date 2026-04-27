@@ -1,4 +1,4 @@
-## Multi Model Trading System
+## Stock Prediction Trading System
 
 A multi-stage machine learning pipeline for stock market direction prediction, combining LSTM temporal modeling, gradient-boosted trees, and Claude AI sentiment analysis in an ensemble framework, evaluated through portfolio backtesting.
 
@@ -44,8 +44,8 @@ See [SETUP.md](SETUP.md) for full installation instructions and troubleshooting.
 
 ## Video Links
 
-- **Demo Video**: [To be added after recording]
-- **Technical Walkthrough**: [To be added after recording]
+- **Demo Video**: https://duke.zoom.us/rec/share/u0d9lTsiClo7ASsf-uektLygQLt4Sgz9pC1cJHNMURzUoI90gkT6vWESzhbqWUQ.8d08QaUF1R3KhsUW?startTime=1777251515000 
+- **Technical Walkthrough**: 
 
 ## Evaluation
 

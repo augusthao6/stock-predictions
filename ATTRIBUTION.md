@@ -90,4 +90,4 @@ Each source file includes a file-level AI attribution comment in its module docs
 AI-generated with Claude Code; reviewed and adapted by student.
 ```
 
-Functions or classes where student modifications were substantial include inline comments explaining the non-obvious design choice (e.g., the forget-gate bias initialization in `lstm_model.py`, the 1-day lag in notebook cell 14, the normalized OBV in `technical.py`).
+Functions or classes where modifications were substantial include inline comments explaining the non-obvious design choice (e.g., the forget-gate bias initialization in `lstm_model.py`, the 1-day lag in notebook cell 14, the normalized OBV in `technical.py`).
