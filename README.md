@@ -45,7 +45,7 @@ See [SETUP.md](SETUP.md) for full installation instructions and troubleshooting.
 ## Video Links
 
 - **Demo Video**: https://duke.zoom.us/rec/share/u0d9lTsiClo7ASsf-uektLygQLt4Sgz9pC1cJHNMURzUoI90gkT6vWESzhbqWUQ.8d08QaUF1R3KhsUW?startTime=1777251515000 
-- **Technical Walkthrough**: 
+- **Technical Walkthrough**: https://duke.zoom.us/rec/share/R7bvDHhLbqbTQJCQmT1rDxdoNbwgwCXl4SwPfzvQqr78KwLAG4waF9LEgKwx2AxV.XjGAi8922TBNRHsj?startTime=1777253615000
 
 ## Evaluation
 
